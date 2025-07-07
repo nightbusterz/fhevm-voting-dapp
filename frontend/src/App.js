@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ethers } from 'ethers';
 import './App.css';
 
@@ -9,9 +9,10 @@ function App() {
   const [decryptedTotal, setDecryptedTotal] = useState('Connect to view');
   const [hasVoted, setHasVoted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [txHash, setTxHash] = useState(null);
 
-  const contractAddress = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
-  const contractABI = [
+  // Memoize contract ABI to prevent recreation on every render
+  const contractABI = useMemo(() => [
     {
       "inputs": [],
       "name": "vote",
@@ -40,9 +41,12 @@ function App() {
       "stateMutability": "view",
       "type": "function"
     }
-  ];
+  ], []); // Empty dependency array means it's created once
 
-  const connectWallet = async () => {
+  const contractAddress = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
+
+  // Stable connectWallet function
+  const connectWallet = useCallback(async () => {
     if (window.ethereum) {
       try {
         const provider = new ethers.BrowserProvider(window.ethereum);
@@ -60,7 +64,7 @@ function App() {
         console.error("Connection failed:", error);
       }
     }
-  };
+  }, [contractABI]); // Now contractABI reference is stable
 
   const updateVoteData = async (contractInstance) => {
     try {
@@ -84,14 +88,26 @@ function App() {
     setLoading(true);
     try {
       const tx = await contract.vote();
+      setTxHash(tx.hash);
       await tx.wait();
       setHasVoted(true);
       await updateVoteData(contract);
     } catch (error) {
       console.error("Voting failed:", error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
+
+  // Auto-connect wallet on page load
+  useEffect(() => {
+    const init = async () => {
+      if (window.ethereum?.selectedAddress) {
+        await connectWallet();
+      }
+    };
+    init();
+  }, [connectWallet]);
 
   return (
     <div className="App">
@@ -135,6 +151,19 @@ function App() {
                 </div>
               </div>
             </div>
+
+            {txHash && (
+              <div className="tx-info">
+                <p>Latest Transaction:</p>
+                <a 
+                  href={`https://localhost:8545/tx/${txHash}`} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                >
+                  {txHash.substring(0, 12)}...{txHash.substring(58)}
+                </a>
+              </div>
+            )}
           </div>
         )}
       </header>
