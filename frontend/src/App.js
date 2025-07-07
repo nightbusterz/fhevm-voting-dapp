@@ -45,30 +45,30 @@ function App() {
 
   const contractAddress = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
 
-  // Memoized updateVoteData function
   const updateVoteData = useCallback(async (contractInstance) => {
     try {
       setLoading(true);
+      
+      // First try to get encrypted data
       const encrypted = await contractInstance.getEncryptedTotal();
       setEncryptedTotal(encrypted);
       
+      // Then try to get decrypted data
       try {
         const decrypted = await contractInstance.getDecryptedTotal();
         setDecryptedTotal(Number(decrypted));
       } catch (decryptError) {
-        console.log("Decryption not available:", decryptError);
-        setDecryptedTotal('Encrypted only');
+        console.log("Decryption permission needed:", decryptError);
+        setDecryptedTotal('Decryption permission needed');
       }
     } catch (error) {
       console.error("Data fetch failed:", error);
-      setEncryptedTotal('Error loading');
-      setDecryptedTotal('Error loading');
+      // Don't set error states here - let the UI show loading states
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Memoized connectWallet with all dependencies
   const connectWallet = useCallback(async () => {
     if (window.ethereum) {
       try {
@@ -83,15 +83,20 @@ function App() {
         
         const voted = await votingContract.hasVoted(accounts[0]);
         setHasVoted(voted);
+        
+        // Initial data load
         await updateVoteData(votingContract);
       } catch (error) {
         console.error("Connection failed:", error);
-        setDecryptedTotal('Connection error');
+        // Reset states to allow retry
+        setContract(null);
+        setAccount('');
+        setDecryptedTotal('Connect to view');
       } finally {
         setLoading(false);
       }
     }
-  }, [contractABI, updateVoteData]); // Now includes updateVoteData
+  }, [contractABI, updateVoteData]);
 
   const handleVote = async () => {
     if (!contract) return;
@@ -102,6 +107,7 @@ function App() {
       setTxHash(tx.hash);
       await tx.wait();
       setHasVoted(true);
+      // Refresh data after voting
       await updateVoteData(contract);
     } catch (error) {
       console.error("Voting failed:", error);
@@ -150,12 +156,12 @@ function App() {
               <div className="encrypted-data">
                 <h3>Encrypted Tally</h3>
                 <div className="data-box">
-                  {encryptedTotal === 'Error loading' ? (
-                    <span className="error-text">Failed to load</span>
+                  {loading ? (
+                    <div className="loading-spinner"></div>
                   ) : encryptedTotal ? (
                     `0x${encryptedTotal.substring(0, 24)}...`
                   ) : (
-                    <div className="loading-spinner"></div>
+                    <span className="status-text">Not available</span>
                   )}
                 </div>
               </div>
@@ -163,12 +169,12 @@ function App() {
               <div className="decrypted-data">
                 <h3>Current Total Votes</h3>
                 <div className="data-box">
-                  {typeof decryptedTotal === 'number' ? (
+                  {loading ? (
+                    <div className="loading-spinner"></div>
+                  ) : typeof decryptedTotal === 'number' ? (
                     decryptedTotal
                   ) : (
-                    <span className={decryptedTotal === 'Error loading' ? 'error-text' : 'status-text'}>
-                      {decryptedTotal}
-                    </span>
+                    <span className="status-text">{decryptedTotal}</span>
                   )}
                 </div>
               </div>
