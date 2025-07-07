@@ -3,6 +3,7 @@ import { ethers } from 'ethers';
 import './App.css';
 
 function App() {
+  // State declarations
   const [contract, setContract] = useState(null);
   const [account, setAccount] = useState('');
   const [encryptedTotal, setEncryptedTotal] = useState(null);
@@ -10,8 +11,9 @@ function App() {
   const [hasVoted, setHasVoted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [txHash, setTxHash] = useState(null);
+  const [error, setError] = useState(null);
 
-  // Memoized contract ABI
+  // Contract ABI
   const contractABI = useMemo(() => [
     {
       "inputs": [],
@@ -45,15 +47,15 @@ function App() {
 
   const contractAddress = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
 
+  // Update vote data function
   const updateVoteData = useCallback(async (contractInstance) => {
     try {
       setLoading(true);
+      setError(null);
       
-      // First try to get encrypted data
       const encrypted = await contractInstance.getEncryptedTotal();
       setEncryptedTotal(encrypted);
       
-      // Then try to get decrypted data
       try {
         const decrypted = await contractInstance.getDecryptedTotal();
         setDecryptedTotal(Number(decrypted));
@@ -63,16 +65,19 @@ function App() {
       }
     } catch (error) {
       console.error("Data fetch failed:", error);
-      // Don't set error states here - let the UI show loading states
+      setError("Failed to load voting data");
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // Connect wallet function
   const connectWallet = useCallback(async () => {
     if (window.ethereum) {
       try {
         setLoading(true);
+        setError(null);
+        
         const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
         const votingContract = new ethers.Contract(contractAddress, contractABI, signer);
@@ -84,20 +89,22 @@ function App() {
         const voted = await votingContract.hasVoted(accounts[0]);
         setHasVoted(voted);
         
-        // Initial data load
         await updateVoteData(votingContract);
       } catch (error) {
         console.error("Connection failed:", error);
-        // Reset states to allow retry
+        setError(`Connection failed: ${error.message}`);
         setContract(null);
         setAccount('');
         setDecryptedTotal('Connect to view');
       } finally {
         setLoading(false);
       }
+    } else {
+      setError("MetaMask not detected");
     }
   }, [contractABI, updateVoteData]);
 
+  // Handle vote function
   const handleVote = async () => {
     if (!contract) return;
     
@@ -107,15 +114,16 @@ function App() {
       setTxHash(tx.hash);
       await tx.wait();
       setHasVoted(true);
-      // Refresh data after voting
       await updateVoteData(contract);
     } catch (error) {
       console.error("Voting failed:", error);
+      setError("Voting failed - see console for details");
     } finally {
       setLoading(false);
     }
   };
 
+  // Auto-connect on load
   useEffect(() => {
     const init = async () => {
       if (window.ethereum?.selectedAddress) {
@@ -125,14 +133,17 @@ function App() {
     init();
   }, [connectWallet]);
 
+  // JSX return
   return (
     <div className="App">
       <header className="App-header">
         <h1>FHE Encrypted Voting dApp</h1>
         
+        {error && <div className="error-message">{error}</div>}
+        
         {!account ? (
-          <button onClick={connectWallet} className="connect-button">
-            Connect Wallet
+          <button onClick={connectWallet} className="connect-button" disabled={loading}>
+            {loading ? 'Connecting...' : 'Connect Wallet'}
           </button>
         ) : (
           <div className="voting-container">
