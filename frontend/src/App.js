@@ -13,7 +13,7 @@ function App() {
   const [txHash, setTxHash] = useState(null);
   const [error, setError] = useState(null);
 
-  // Contract ABI (Updated for FHE compatibility)
+  // Contract ABI with FHE compatibility
   const contractABI = useMemo(() => [
     {
       "inputs": [],
@@ -45,6 +45,7 @@ function App() {
     }
   ], []);
 
+  // Your specified contract address
   const contractAddress = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
 
   // Initialize FHE environment
@@ -59,7 +60,7 @@ function App() {
     }
   };
 
-  // Enhanced update vote data function
+  // Update vote data with FHE handling
   const updateVoteData = useCallback(async (contractInstance) => {
     try {
       setLoading(true);
@@ -85,7 +86,7 @@ function App() {
     }
   }, []);
 
-  // Enhanced connect wallet function
+  // Connect wallet with FHE initialization
   const connectWallet = useCallback(async () => {
     if (window.ethereum) {
       try {
@@ -93,11 +94,11 @@ function App() {
         setError(null);
         
         const provider = new ethers.BrowserProvider(window.ethereum);
-        await initFHE(provider); // Initialize FHE
+        await initFHE(provider);
         
         // Verify contract exists
         const code = await provider.getCode(contractAddress);
-        if (code === '0x') throw new Error('Contract not deployed at this address');
+        if (code === '0x') throw new Error('Contract not deployed');
         
         const signer = await provider.getSigner();
         const votingContract = new ethers.Contract(contractAddress, contractABI, signer);
@@ -125,7 +126,7 @@ function App() {
     }
   }, [contractABI, updateVoteData]);
 
-  // Handle vote function
+  // Handle vote submission
   const handleVote = async () => {
     if (!contract) return;
     
@@ -154,7 +155,6 @@ function App() {
     init();
   }, [connectWallet]);
 
-  // JSX return (unchanged)
   return (
     <div className="App">
       <header className="App-header">
