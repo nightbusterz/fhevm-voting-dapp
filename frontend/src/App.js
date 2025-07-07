@@ -11,7 +11,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [txHash, setTxHash] = useState(null);
 
-  // Memoize contract ABI to prevent recreation on every render
+  // Memoized contract ABI
   const contractABI = useMemo(() => [
     {
       "inputs": [],
@@ -41,14 +41,38 @@ function App() {
       "stateMutability": "view",
       "type": "function"
     }
-  ], []); // Empty dependency array means it's created once
+  ], []);
 
   const contractAddress = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
 
-  // Stable connectWallet function
+  // Memoized updateVoteData function
+  const updateVoteData = useCallback(async (contractInstance) => {
+    try {
+      setLoading(true);
+      const encrypted = await contractInstance.getEncryptedTotal();
+      setEncryptedTotal(encrypted);
+      
+      try {
+        const decrypted = await contractInstance.getDecryptedTotal();
+        setDecryptedTotal(Number(decrypted));
+      } catch (decryptError) {
+        console.log("Decryption not available:", decryptError);
+        setDecryptedTotal('Encrypted only');
+      }
+    } catch (error) {
+      console.error("Data fetch failed:", error);
+      setEncryptedTotal('Error loading');
+      setDecryptedTotal('Error loading');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Memoized connectWallet with all dependencies
   const connectWallet = useCallback(async () => {
     if (window.ethereum) {
       try {
+        setLoading(true);
         const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
         const votingContract = new ethers.Contract(contractAddress, contractABI, signer);
@@ -62,25 +86,12 @@ function App() {
         await updateVoteData(votingContract);
       } catch (error) {
         console.error("Connection failed:", error);
+        setDecryptedTotal('Connection error');
+      } finally {
+        setLoading(false);
       }
     }
-  }, [contractABI]); // Now contractABI reference is stable
-
-  const updateVoteData = async (contractInstance) => {
-    try {
-      const encrypted = await contractInstance.getEncryptedTotal();
-      setEncryptedTotal(encrypted);
-      
-      try {
-        const decrypted = await contractInstance.getDecryptedTotal();
-        setDecryptedTotal(Number(decrypted));
-      } catch {
-        setDecryptedTotal('No decryption permissions');
-      }
-    } catch (error) {
-      console.error("Data update failed:", error);
-    }
-  };
+  }, [contractABI, updateVoteData]); // Now includes updateVoteData
 
   const handleVote = async () => {
     if (!contract) return;
@@ -99,7 +110,6 @@ function App() {
     }
   };
 
-  // Auto-connect wallet on page load
   useEffect(() => {
     const init = async () => {
       if (window.ethereum?.selectedAddress) {
@@ -140,14 +150,26 @@ function App() {
               <div className="encrypted-data">
                 <h3>Encrypted Tally</h3>
                 <div className="data-box">
-                  {encryptedTotal ? `0x${encryptedTotal.substring(0, 24)}...` : "Loading..."}
+                  {encryptedTotal === 'Error loading' ? (
+                    <span className="error-text">Failed to load</span>
+                  ) : encryptedTotal ? (
+                    `0x${encryptedTotal.substring(0, 24)}...`
+                  ) : (
+                    <div className="loading-spinner"></div>
+                  )}
                 </div>
               </div>
               
               <div className="decrypted-data">
                 <h3>Current Total Votes</h3>
                 <div className="data-box">
-                  {decryptedTotal}
+                  {typeof decryptedTotal === 'number' ? (
+                    decryptedTotal
+                  ) : (
+                    <span className={decryptedTotal === 'Error loading' ? 'error-text' : 'status-text'}>
+                      {decryptedTotal}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
